@@ -1,170 +1,131 @@
-KMM Product Browser App
+# ProducBrowser
+
+A Kotlin Multiplatform (KMP) product browser application for Android and iOS, built with Jetpack Compose Multiplatform. The app allows users to browse, search, and view details of products fetched from a remote API — with shared business logic across both platforms.
+
+---
+
+## Business Requirements
+
+- Display a list of products fetched from a remote API
+- Support real-time product search with debounce to avoid excessive API calls
+- Show product details including image, title, price, rating, brand, and description
+- Filter products by category
+- Handle loading, error, and success states across all screens
+- Search queries shorter than 2 characters are rejected with a user-friendly message
+- Products with missing titles or invalid prices are filtered out before display
+- Products are sorted by rating in descending order on search results
+
+---
+
+## Architecture Overview
+
+The project follows **Clean Architecture** with a strict separation of layers:
+
+```
+UI Layer         →   Jetpack Compose Multiplatform screens & components
+ViewModel Layer  →   State management using StateFlow + coroutines
+Domain Layer     →   UseCases with business logic, Repository interfaces
+Data Layer       →   Repository implementations, Ktor API client, DTOs
+```
+
+### Key patterns used
+
+- **Repository pattern** — abstracts data sources behind an interface
+- **UseCase pattern** — encapsulates business rules (validation, filtering, sorting)
+- **Unidirectional data flow** — ViewModel exposes `StateFlow<UiState>`, UI only observes
+- **Dependency Inversion** — all layers depend on interfaces, not concrete classes
+
+### Tech stack
+
+| Area | Library |
+|---|---|
+| UI | Jetpack Compose Multiplatform |
+| Navigation | Jetbrains Navigation Compose |
+| DI | Koin |
+| Networking | Ktor |
+| Serialization | kotlinx.serialization |
+| Async | Kotlin Coroutines + Flow |
+| Image loading | Coil |
+| Testing | kotlin.test + kotlinx-coroutines-test |
+
+### Module structure
+
+```
+composeApp/
+  src/
+    commonMain/
+      data/
+        remote/         ← Ktor API client, DTOs
+        repository/     ← Repository implementations
+      domain/
+        model/          ← Domain models
+        repository/     ← Repository interfaces
+        usecase/        ← Business logic (GetProductsUseCase, SearchProductsUseCase)
+      presentation/
+        ui/             ← Compose screens
+        viewmodel/      ← ViewModels with StateFlow
+      di/               ← Koin modules
+    androidMain/        ← Android entry point, Application class
+    iosMain/            ← iOS entry point (MainViewController)
+    commonTest/         ← Shared unit tests
+```
+
+---
+
+## How to Build and Run
+
+### Prerequisites
+
+- Android Studio Meerkat or later
+- Xcode 15 or later (for iOS)
+- JDK 17
+- Kotlin 2.x
+- CocoaPods (for iOS dependencies)
+
+### Android
+
+1. Open the project in Android Studio
+2. Wait for Gradle sync to complete
+3. Select the `composeApp` run configuration
+4. Choose an Android emulator or connected device
+5. Click **Run**
+
+Or via terminal:
+```bash
+./gradlew :composeApp:assembleDebug
+```
+
+### iOS
+
+1. Open the project in Android Studio
+2. Run the Kotlin framework build first:
+```bash
+./gradlew :composeApp:assembleXCFramework
+```
+3. Open `iosApp/iosApp.xcodeproj` in Xcode
+4. Select a simulator (iPhone 16 or later recommended)
+5. Press **Cmd + R** to build and run
 
-A fully cross-platform Kotlin Multiplatform Mobile (KMM) application built using Kotlin Compose Multiplatform (CMP) for Android and iOS. The app consumes product data from the public API:
+Or run directly from Android Studio by selecting the `iosApp` run configuration with a simulator target.
 
-📦 https://dummyjson.com/products
+---
 
-This project demonstrates clean architecture, networking with Ktor, shared UI using Compose Multiplatform, and shared business logic through KMM.
+## Trade-offs and Assumptions
 
-📘 Business Requirements
+**Passing objects through navigation**
+Full `Product` objects are passed as navigation arguments using a custom `NavType` with JSON serialization. This avoids an extra API call on the detail screen but has a URL size limitation for very large objects. For production, passing only the product ID and re-fetching is safer.
 
-Revest is exploring an internal cross-platform mobile product catalog. The app must allow users to:
+**No local caching**
+The app fetches fresh data on every launch with no offline support. A Room/SQLDelight cache layer would be the next step for production readiness.
 
-✔ 1. View product list
+**`ProductApiClient` as interface**
+The API client was extracted to an interface to support dependency inversion and enable unit testing with a `FakeProductApiClient` — without needing any mocking library in KMP.
 
-Display product title, price, and thumbnail.
+**Koin over other DI solutions**
+Koin was chosen over Hilt because it is fully KMP-compatible. Hilt is Android-only and cannot be used in `commonMain`.
 
-✔ 2. View product details
+**Manual fakes over Mockative**
+Unit tests use hand-written fake implementations instead of a mocking library. This avoids KSP configuration overhead and produces more readable tests that are easier to maintain.
 
-Show title, description, brand, price, rating.
-
-✔ 3. Search products
-
-Implement API-based search using DummyJSON /products/search?q=.
-
-✔ 4. (Optional) Filter products by category
-
-DummyJSON provides /products/category/{category}.
-
-🏗 Technical Requirements
-
-🔹 Kotlin Multiplatform Mobile (Android + iOS)
-
-🔹 Clean Architecture (Data → Domain → Presentation)
-
-🔹 Compose Multiplatform for shared UI
-
-🔹 Ktor Client for API requests
-
-🔹 Kotlinx.serialization for JSON
-
-🔹 StateFlow for ViewModel state management
-
-🔹 One use case minimum (GetProducts, SearchProducts included)
-
-🔹 At least one Unit Test (included)
-
-🔹 DI: Manual dependency injection (simple + clean)
-
-📁 Project Architecture Overview
-
-KMMProductBrowser/
-├── androidApp/                    # Android application (Compose UI host)
-├── iosApp/                        # iOS app (Swift/Compose host)
-└── shared/                        # Shared KMM module
-├── data/                      # Data layer
-│   ├── remote/                # Ktor API client + DTOs
-│   └── repository/            # Repository implementation
-├── domain/                    # Business logic
-│   ├── model/                 # Domain models
-│   └── usecase/               # Use cases
-├── presentation/              # UI + ViewModel
-│   ├── viewmodel/             # State management
-│   └── ui/                    # Compose Screens
-└── commonTest/                # Shared Unit Tests
-
-🔗 API Integration
-
-Endpoints used:
-
-Feature
-
-API Endpoint
-
-Get all products
-
-/products
-
-Search products
-
-/products/search?q=keyword
-
-Filter by category (optional)
-
-/products/category/{name}
-
-Ktor + Serialization setup:
-
-install(ContentNegotiation) {
-json(Json { ignoreUnknownKeys = true })
-}
-
-🧠 Clean Architecture Summary
-
-Data Layer
-
-Ktor API client
-
-DTOs & Mappers
-
-Repository Implementation
-
-Domain Layer
-
-Pure Kotlin business models
-
-Use cases: GetProductsUseCase, SearchProductsUseCase
-
-Presentation Layer
-
-ProductListViewModel using StateFlow
-
-Shared composables using Compose Multiplatform
-
-UI state modeled via immutable ProductListState
-
-📱 UI Screens
-
-Product List Screen
-
-Search bar (real-time API search)
-
-LazyColumn listing products
-
-Loading & error states included
-
-Product Detail Screen
-
-Title, description, price, brand, rating
-
-(Optional) Carousel of product images
-
-🧪 Unit Tests
-
-A shared test verifies business logic:
-
-GetProductsUseCaseTest tests use-case correctness using a fake repository.
-
-▶️ How to Run the Project
-
-Android
-
-Open project in Android Studio.
-
-Let Gradle sync.
-
-Run the androidApp configuration.
-
-iOS
-
-Run:
-
-./gradlew :shared:assembleXCFramework
-
-Open iosApp/iosApp.xcworkspace in Xcode.
-
-Select a simulator and press Run.
-
-Note: Compose Multiplatform for iOS is still evolving; Xcode integration is already configured in the project.
-
-🧩 Assumptions & Trade-offs
-
-Image loading: simple placeholder for CMP; full loader can be added (Kamel, Coil-Native, etc.)
-
-ViewModel lifecycle: Android injects lifecycleScope; iOS uses internal KMM scope
-
-Error messages simplified for assignment clarity
-
-No caching layer added (SQLDelight optional)
-
-Navigation is minimalistic; real app may use multiplatform navigation library
+**Error messages from API**
+Error messages are surfaced directly from the exception message. In production these should be mapped to user-friendly strings per error type (4xx, 5xx, network).
